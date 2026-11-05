@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cloud-deployment-findings · 玄灵检索库</title>
+<link rel="stylesheet" href="site.css"></head>
+<body>
+<nav><a href="index.html">预计算检索页</a><a href="readme.html">README</a>
+<a href="experiments.html">实验表</a><a href="findings.html">云端核实</a></nav>
+<div class="disclaimer"><p><strong>声明一（实时性）</strong>：本页展示的是预计算的检索结果，不是实时系统。输入不在题集内的问题不会得到答案——这里没有任何模型、没有网络请求、没有可查询的索引。</p><p><strong>声明二（口径）</strong>：本页每个数字都跟着口径版本（R2b→R2b2→R2c2→R2d 时间线），口径与 `README.md` §4 同源；跨口径的两行之间不做差值，页面自己不算任何指标。</p></div>
+<main>
+<h1>云端部署核实记录（S5，2026-11-04）</h1>
+<p>对象是腾讯云开发 CloudBase（本项目 PRD 结论 13／16 选的云端形态载体）。这份文档只干一件事： <strong>把"云端能不能做、该不该做"从口头判断变成有原句的判断</strong>，并把没核实的地方明确留白。</p>
+<h2>0. 方法与边界（先说证据是什么级别）</h2>
+<ul><li>时间：2026-11-04。手段：官方文档站 <code>docs.cloudbase.net</code> 与 <code>cloud.tencent.com</code> 的文档页抓取，未开通环境、未部署、未调用任何云端接口。</li><li><strong>所以这份文档没有一条是"我跑出来的"</strong>，全部是"官方这么写的"。它足以支撑"要不要做"的决策，不足以支撑"性能如何"的结论。</li><li>引号里的原句由网页抓取工具从页面正文取出，<strong>没有逐字与渲染页人工比对</strong>（个别长句中间有省略号，我按取到的样子保留）。要引用给别人，请点开 URL 自己复核一遍。</li><li>URL 全部是核实当天实际打开的页面，不是猜的、不是拼的。</li></ul>
+<hr>
+<h2>1. 五条已核实事实（各配官方原句与 URL）</h2>
+<h3>F1｜默认域名强制一个"访问提示中间页"，访客必须点击才能进入业务页</h3>
+<blockquote>"用户通过浏览器直接访问的请求…将会展示'访问提示中间页'…访客需在阅读风险提示后，点击「确定访问」方可进入实际业务页面。"</blockquote>
+<blockquote>"原有的'默认域名有效期续期'机制已正式<strong>下线</strong>。不再需要频繁进行手动续期，但「访问提示中间页」将作为一项软性安全提醒长期存在。"</blockquote>
+<p>来源：<a href="https://docs.cloudbase.net/service/alias">默认域名访问限制及中间页</a>、<a href="https://docs.cloudbase.net/service/introduce">HTTP 网关概述·默认域名</a> <strong>它决定什么</strong>：A6 的验收是"CloudBase 链接可访问，带口令保护"。默认域名下，链接打开的第一屏不是我的界面，是一道要人点的风险提示。</p>
+<h3>F2｜移除中间页的唯一合规途径是自定义域名，而自定义域名必须完成 ICP 备案</h3>
+<blockquote>"自定义域名必须完成 ICP 备案…移除中间页的唯一合规途径是配置并使用自定义域名。"</blockquote>
+<blockquote>"生产环境强烈建议绑定<strong>已完成备案的自定义域名</strong>，以获得完整的服务能力和稳定性保障。"</blockquote>
+<p>来源：<a href="https://docs.cloudbase.net/service/alias">默认域名访问限制及中间页</a>、<a href="https://docs.cloudbase.net/service/introduce">HTTP 网关概述</a>、<a href="https://docs.cloudbase.net/service/custom-domain">自定义域名</a> <strong>它决定什么</strong>：这一条把"云端演示"的成本从"部署脚本"抬到"备案流程"。备案是周级外部流程，不在一周项目预算里。</p>
+<h3>F3｜默认域名官方定位为"仅适用于开发测试阶段"，且有访问频率限制与停访问的风控权</h3>
+<blockquote>"但基于安全合规要求，默认域名仅适用于<strong>开发测试阶段</strong>，存在以下限制：访问频率限制／部分高级功能不可用／可能存在稳定性风险"</blockquote>
+<blockquote>"平台对默认域名访问量进行实时监控，若检测到访问量异常波动，平台保留采取禁止访问等风控措施的权利"</blockquote>
+<p>来源：<a href="https://docs.cloudbase.net/service/introduce">HTTP 网关概述</a>、<a href="https://docs.cloudbase.net/service/alias">默认域名访问限制及中间页</a> <strong>它决定什么</strong>：就算接受中间页，一个被投屏、被多人点开的演示链接正好落在"访问量异常波动"这一类风险里。</p>
+<h3>F4｜云函数超时有官方上限句"上限为 60s"，延长到 900s 属于计费能力项</h3>
+<blockquote>"建议在云控制台调整为需要的超时时间（上限为 60s），在云函数内使用 callback() 返回成功，客户端不等待执行结果。"</blockquote>
+<blockquote>"允许用户根据业务需求自定义云函数的运行时间上限和内存分配量，突破默认资源限制…支持将运行时间最多延长至 900s，内存扩展至数 GB。"</blockquote>
+<p>来源：<a href="https://docs.cloudbase.net/cloud-function/faq">云函数常见问题·性能相关</a>、<a href="https://cloud.tencent.com/document/product/876/120713">云开发 CloudBase 计费能力项说明</a> <strong>它决定什么</strong>：结论 16（云端只读、上传区禁用）依赖的"60 秒"现在有原句了；但<strong>免费体验版到底能设到哪一档没核实</strong>（见 U1），所以这条支撑的是方向，不是精确预算。</p>
+<h3>F5｜内置对话模型免 API Key 调用，免费额度用尽后自动从套餐资源点抵扣</h3>
+<blockquote>"调用时使用 <code>cloudbase</code> provider（<code>ai.createModel("cloudbase")</code>），免费额度用尽后会自动从套餐资源点抵扣，无需配置 API Key。"</blockquote>
+<blockquote>"切换后还可直接使用 <code>deepseek-v4-flash</code>、<code>glm-5.2</code>、<code>kimi-k2.6</code>、<code>minimax-m3</code> 等更多模型。"</blockquote>
+<p>来源：<a href="https://docs.cloudbase.net/ai/FAQ">AI 常见问题 FAQ</a> <strong>它决定什么</strong>：云端形态不需要自带模型 Key 就能出答案，这是"可行路径"里最实的一条。列出的都是对话模型，<strong>嵌入模型是否内置没找到原句</strong>（见 U3）。</p>
+<h3>附：两条支撑数字（同样有原句，不单独算"事实"）</h3>
+<blockquote>"免费体验版：0 元/月（3,000 点）"；"Q: 超出套餐配额后怎么收费？ A: 超限部分按 <strong>1:1</strong> 的比例扣费（即 1000 点 = 1 元）。" —— <a href="https://docs.cloudbase.net/quick-start/resource-point">资源点计费 FAQ</a> 这条把 PRD 里"免费环境每月 3000 资源点"从记忆升级成有原句。<strong>注意它只回答计费，不回答服务行为</strong>（见 U5）。</blockquote>
+<blockquote>"上传方式说明：默认使用 <code>cos</code>，可指定 <code>zip</code>（限制 1.5MB）或 <code>image</code>（镜像部署）。" —— <a href="https://docs.cloudbase.net/api-reference/manager/node/function">云函数 API 参考</a> 这条是"函数内置小索引"能成立的尺寸依据（见 P1）。</blockquote>
+<hr>
+<h2>2. 未核实清单（明确留白，不许下游当成已知）</h2>
+<table><thead><tr><th>#</th><th>事项</th><th>核实到哪一步</th><th>还缺什么</th></tr></thead><tbody><tr><td>U1</td><td><strong>免费环境的超时档位</strong></td><td>官方两处分别写"上限为 60s"（云函数 FAQ，未注明套餐）与"最多延长至 900s"（计费能力项）</td><td>免费体验版实际可选到哪一档；两处数字是同一件事的不同层还是不同套餐的不同上限，没找到原句</td></tr><tr><td>U2</td><td><strong>HTTP 网关的服务端超时</strong></td><td>只找到 SDK 侧：<code>cloudbase-js-sdk</code> 默认 15 秒、可自定义（<a href="https://docs.cloudbase.net/ai/FAQ">AI FAQ</a>）</td><td>网关侧超时数字与可否调，没找到原句。SDK 的 15 秒<strong>不等于</strong>网关的 15 秒</td></tr><tr><td>U3</td><td><strong>内置 embedding／向量模型</strong></td><td>AI FAQ 列举的内置模型全是对话类；页面里<strong>未提及</strong>向量／文本嵌入模型</td><td>有没有 <code>text-embedding</code> 型内置模型、维度多少、是否走同一份资源点抵扣</td></tr><tr><td>U4</td><td><strong>静态托管容量数字</strong></td><td>价格文档提到容量条目"包含云存储、数据库、知识库容量"，但没取到免费体验版静态托管的具体 GB 数</td><td>免费额度下的容量数字与超限行为</td></tr><tr><td>U5</td><td><strong>免费点耗尽的确切行为</strong></td><td>计费侧有原句："超限部分按 1:1 的比例扣费"</td><td><strong>服务侧</strong>行为：未开通按量／欠费／点用完这三种情况下，环境是停服、限流还是仅停止计费项——没找到原句</td></tr><tr><td>U6</td><td>免费环境能否用 PostgreSQL ＋ pgvector（仓库既有 Q28）</td><td>本轮没查</td><td>与 PRD 风险表同一条，状态仍是未核实</td></tr></tbody></table>
+<hr>
+<h2>3. 如果将来要做：验证过的可行路径</h2>
+<p>"验证过"指<strong>每一步都挂着一条官方原句或本仓实测原料</strong>，不是"我估计可以"。</p>
+<p><strong>P1｜函数内置 0.9MB 索引，检索在函数里现算余弦（不依赖云端向量库）</strong></p>
+<ul><li>原料（本仓实测）：索引 216 条 × 维度 1024（<code>docs/model-selection.md</code> 真实调用量出来的），float32 存 → 216×1024×4 ＝ <strong>884,736 字节 ≈ 0.88 MB</strong>（float16 可再减半，本仓未实测）。</li><li>尺寸依据（官方原句）：代码包 <code>zip</code> 直传"限制 1.5MB"（见 §1 末尾附条）。0.88 MB 装得下，还有余量放代码。</li><li>为什么这条路绕开了 U6：不需要 pgvector，也不需要 chroma——现算余弦只需要一个数组。</li><li><strong>待验证</strong>：函数内存/CPU 档位下的实际耗时，以及 216×1024 次乘加在免费档会不会顶到超时（U1）。这条我只能说"没有依赖挡住它"，不能说"实测很快"。</li></ul>
+<p><strong>P2｜对话模型用内置免 Key 的那条</strong></p>
+<ul><li>官方原句：<code>ai.createModel("cloudbase")</code>、"无需配置 API Key"（F5）。</li><li>落到本仓架构是<strong>一个 <code>plugins/llms/</code> 新文件 ＋ 一行配置</strong>，<code>core/</code> 不动——这正是 6 条"主程序零改动"提交走过的路。</li><li><strong>代价</strong>：换模型＝换答案层行为，现行 v8 那套 27 题数字全部作废，云端那一行必须另起一行、另标口径，不能拿来替换本地成绩。</li></ul>
+<p><strong>P3｜嵌入模型走第三方 ＋ Key（因为内置嵌入未核实）</strong></p>
+<ul><li>U3 没核实，所以不能把"云端也有内置 embedding"写进设计。可行路径是 <code>embedders</code> 再加一个 openai-compatible 型插件，Key 从环境变量读、不入库。</li><li><strong>硬约束（本仓实测）</strong>：<code>dim=1024</code> 是配置与索引的契约——换嵌入提供方很可能换维度，<strong>换维度＝索引必须重建</strong>，而 P1 的 0.88MB 索引和 <code>min_score=0.5</code> 这条阈值都是当前嵌入模型的产物。云端索引必须由与本地同一模型生成，否则分数不可比，拒答判据直接失真。</li><li>结论：云端形态真正要动的不是"部署脚本"，是<strong>嵌入提供方 ＋ 阈值重标定</strong>，这就是行 E／行 M 那一族的预算，不是半天能收口的。</li></ul>
+<hr>
+<h2>4. 为什么本版不做（已核实的主动不做，不是没来得及）</h2>
+<ol><li><strong>默认域名强制中间页，访客必须点「确定访问」才能进业务页</strong>（F1 原句）。这个项目的真实读者是"面试官的 5 分钟"，第一屏是一道要人确认的风险提示——演示动线被平台打断，而这还没算上口令那一层。</li><li><strong>移除中间页的唯一合规途径是绑定已完成 ICP 备案的自定义域名</strong>（F2 原句）。备案是周级外部流程，不在一周预算内；我也不打算为了一个演示链接去借一个域名。</li><li>再叠加 P3 那条本仓契约约束（换嵌入＝换维度＝重建索引＝重标阈值），云端形态的成本远高于它给这个作品集带来的加分。</li></ol>
+<p>所以：<strong>A5/A6 保持"接口预留已验证、实现待补"，云端不写进任何"已实现"的说法</strong>（结论 23 已经为这条打过一次假，不打算打第二次）。</p>
+<hr>
+<h2>5. 与仓库既有说法的对账</h2>
+<table><thead><tr><th>仓库里的说法</th><th>出处</th><th>本轮之后</th></tr></thead><tbody><tr><td>"云函数 60 秒超时使'上传即入库'不可靠"</td><td>PRD §7 风险表、结论 16</td><td><strong>有官方原句了</strong>（F4），但适用套餐未核实（U1）→ 结论方向不变，措辞不能写成"免费环境就是 60s"</td></tr><tr><td>"CloudBase 免费环境每月 3000 资源点"</td><td>PRD §7 对照表</td><td><strong>升级为已核实</strong>（附条原句：免费体验版 0 元/月（3,000 点））</td></tr><tr><td>"免费环境是否含 PostgreSQL/pgvector 未核实"</td><td>PRD §7 风险表、Q28</td><td><strong>仍未核实</strong>（U6），P1 这条路径的存在让它不再是阻塞项</td></tr><tr><td>"云端只读问答"</td><td>结论 16</td><td>维持；本轮新增的反对理由不是超时，而是 F1/F2 的域名与备案</td></tr><tr><td>HTTP 网关超时、内置 embedding、静态托管容量、点耗尽的服务行为</td><td>之前散落在讨论里</td><td>全部登记为<strong>未核实</strong>（U2/U3/U4/U5），下游不许当已知用</td></tr></tbody></table>
+<p>按纪律：旧读数不覆盖，这一节只加"本轮之后"的状态列；PRD 与决策记录的原文不改写，只在原处加一条指向本文档的日期注。</p></main>
+<footer>静态站点：无后端、无 API Key、不外呼模型。数据来自本机跑分明细的 L1 分层导出，构建时已过发布门禁。
+<br>录屏视频发布位：<span class="refused">〔尚未录制；未批准的媒体文件由门禁 G7 拦在产物之外〕</span></footer>
+</body></html>

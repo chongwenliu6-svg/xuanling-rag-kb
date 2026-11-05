@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>预计算检索页 · 玄灵检索库</title>
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<nav>
+  <a href="index.html" class="on">预计算检索页</a>
+  <a href="readme.html">README</a>
+  <a href="experiments.html">实验表</a>
+  <a href="findings.html">云端核实</a>
+</nav>
+
+<div class="disclaimer"><p><strong>声明一（实时性）</strong>：本页展示的是预计算的检索结果，不是实时系统。输入不在题集内的问题不会得到答案——这里没有任何模型、没有网络请求、没有可查询的索引。</p><p><strong>声明二（口径）</strong>：本页每个数字都跟着口径版本（R2b→R2b2→R2c2→R2d 时间线），口径与 `README.md` §4 同源；跨口径的两行之间不做差值，页面自己不算任何指标。</p></div>
+
+<main>
+  <h1>同一道题，在八次跑分里的变化</h1>
+  <p class="lead">数据是存量跑分明细的 <strong>L1 指标层</strong> 导出：题号、是否命中、gold 名次、分数、放行条数、出处条数、口径版本。
+  题面、文件名、原文片段属 L2，<strong>按字段逐个批准</strong>才发布；未批准的字段显示拒答文案而不是假数据。片段的代号是不透明哈希。</p>
+
+  <section class="controls">
+    <label>题目
+      <select id="q"></select>
+    </label>
+    <label>主看行
+      <select id="row"></select>
+    </label>
+    <span id="l2state" class="badge"></span>
+  </section>
+
+  <section>
+    <h2>主看行的 top5</h2>
+    <div id="top"></div>
+  </section>
+
+  <section>
+    <h2>跨实验行对比</h2>
+    <p class="lead">这一张表把实验记录变成可点的：同一题号在不同行里的 gold 名次、是否进前 5、管线是否拒答、
+    答案是否说了「资料中没有」、放行几条、出处几条。每行都挂着口径版本与判定结论，<strong>跨口径的行之间不做差值</strong>。
+    看的时候记住一件事：这八行里只有行 A 动过索引，其余各行动的是提示词、判据或口径——
+    所以<strong>名次那一列几乎不动，而放行条数与出处条数动得最凶</strong>。
+    这不是页面坏了，这正是四层失效模型：改错层，就动不了你想动的那一列。</p>
+    <div id="compare"></div>
+  </section>
+
+  <section>
+    <h2>L2 内容层</h2>
+    <div id="l2"></div>
+  </section>
+
+  <section>
+    <h2>这些字段分别属于哪一层失效</h2>
+    <div class="legend">
+      <p><strong>排名层</strong>：gold 名次、是否进前 5、top5 的分数分布。</p>
+      <p><strong>判据层</strong>：负样本的 过阈值、放行条数（绝对阈值被实测证伪的那一层）。</p>
+      <p><strong>可答性层</strong>：gold 已放行却仍拒答、拒答布尔。</p>
+      <p><strong>呈现层</strong>：引用条数与是否命中 gold（出处只能来自检索命中）。</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>行是从哪里来的</h2>
+    <div id="provenance"></div>
+  </section>
+</main>
+
+<footer>静态站点：无后端、无 API Key、不外呼模型。数据来自本机跑分明细的 L1 分层导出，构建时已过发布门禁。
+<br>录屏视频发布位：<span class="refused">〔尚未录制；未批准的媒体文件由门禁 G7 拦在产物之外〕</span></footer>
+
+<script src="site.js"></script>
+</body>
+</html>

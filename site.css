@@ -1,0 +1,31 @@
+:root { --fg:#1c1f24; --mut:#5b636e; --line:#e3e6ea; --bg:#fff; --warn:#8a4b00; --hit:#0a6b3d; --miss:#a1121a; }
+* { box-sizing: border-box; }
+body { margin:0; font:15px/1.65 system-ui,"Microsoft YaHei",sans-serif; color:var(--fg); background:var(--bg); }
+nav { display:flex; gap:18px; padding:14px 24px; border-bottom:1px solid var(--line); position:sticky; top:0; background:#fff; }
+nav a { color:var(--mut); text-decoration:none; }
+nav a.on, nav a:hover { color:var(--fg); font-weight:600; }
+main { max-width:1080px; margin:0 auto; padding:20px 24px 60px; }
+h1 { font-size:24px; margin:18px 0 6px; }
+h2 { font-size:18px; margin:26px 0 8px; border-top:1px solid var(--line); padding-top:18px; }
+h3 { font-size:16px; margin:18px 0 6px; }
+.lead { color:var(--mut); }
+.disclaimer { margin:16px 24px; padding:14px 18px; border:1px solid #f0c98a; background:#fff8ec; border-radius:8px; }
+.disclaimer p { margin:6px 0; }
+.controls { display:flex; gap:16px; align-items:center; flex-wrap:wrap; margin:14px 0 6px; }
+label { color:var(--mut); }
+select { font:inherit; padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; max-width:520px; }
+table { border-collapse:collapse; width:100%; margin:10px 0 18px; font-size:14px; }
+th, td { border:1px solid var(--line); padding:7px 9px; text-align:left; vertical-align:top; }
+th { background:#f6f7f9; }
+td.num { font-variant-numeric:tabular-nums; }
+.badge { display:inline-block; padding:2px 9px; border-radius:99px; font-size:13px; border:1px solid var(--line); color:var(--mut); }
+.hit { color:var(--hit); font-weight:600; }
+.miss { color:var(--miss); font-weight:600; }
+.refused { color:var(--warn); background:#fff4e5; padding:10px 12px; border:1px dashed #e0b070; border-radius:8px; display:block; }
+pre { background:#f6f7f9; padding:12px 14px; overflow:auto; border-radius:8px; font-size:13px; }
+code { background:#f2f3f5; padding:1px 5px; border-radius:4px; font-size:13px; }
+blockquote { margin:10px 0; padding:8px 14px; border-left:3px solid var(--line); color:var(--mut); background:#fafbfc; }
+footer { border-top:1px solid var(--line); padding:18px 24px; color:var(--mut); font-size:13px; }
+.snippet { font-family:ui-monospace,Consolas,monospace; color:var(--mut); }
+.legend p { margin:4px 0; }
+.prov { color:var(--mut); font-size:13px; }

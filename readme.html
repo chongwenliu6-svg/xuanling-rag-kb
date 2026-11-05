@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>README · 玄灵检索库</title>
+<link rel="stylesheet" href="site.css"></head>
+<body>
+<nav><a href="index.html">预计算检索页</a><a href="readme.html">README</a>
+<a href="experiments.html">实验表</a><a href="findings.html">云端核实</a></nav>
+<div class="disclaimer"><p><strong>声明一（实时性）</strong>：本页展示的是预计算的检索结果，不是实时系统。输入不在题集内的问题不会得到答案——这里没有任何模型、没有网络请求、没有可查询的索引。</p><p><strong>声明二（口径）</strong>：本页每个数字都跟着口径版本（R2b→R2b2→R2c2→R2d 时间线），口径与 `README.md` §4 同源；跨口径的两行之间不做差值，页面自己不算任何指标。</p></div>
+<main><p class="refused">本页在构建时按发布门禁隐藏了 0 处未批准的 L2 字面（题面／语料文件名／原文片段）与 3 处本机绝对路径，替换成可见标记而不是删除内容。仓库里的原文一字未改。</p>
+<h1>玄灵检索库 · 本地优先的模块化中文 RAG 知识库</h1>
+<p>一周独立完成的检索增强生成项目：7 个可替换插件契约（§3 逐个列名）＋ 一个 706 行、六个文件的主程序 ＋ 一套 27 题、带口径版本、可复现的评测。 <strong>它现在会拒答，而且拒得可测量。</strong></p>
+<blockquote>这份 README 的写法是刻意的：所有百分比后面都跟着分母、口径版本号与能不能复现；失败行不删；被证据否决的岔路单列一节。 措辞红线（PRD §3/§4.5 写死）：不写"企业级""高并发""准确率 X%"这类没有口径支撑的话。</blockquote>
+<hr>
+<h2>1. 30 秒看到的东西</h2>
+<table><thead><tr><th></th><th></th></tr></thead><tbody><tr><td><img src="assets/ui_shell_v2.png" alt="界面三块：上传区（状态流转）／提问区（检索条数与耗时）／答案区（出处可展开，本图为折叠态）＋只读装配指纹"></td><td>上传区（异步入库＋状态流转）／提问区（预热＋耗时）／答案区（出处可展开原文片段）。&lt;br&gt;装配指纹只读展示，<strong>没有任何切换控件</strong>——理由见 §3。&lt;br&gt;*这张图是真渲染，也不是随手截的：2026-11-05 用本机 Chrome headless 打开 <code>http://127.0.0.1:8125</code>，提交<strong>已批准的题 1</strong>、等答案与出处落地后拍摄，窗口 1440×1140 是特意裁的——页面底部那行"已入库文件"清单不在画面里。画面内的文本用几何式审计过一遍（视野内 721 字、未批准字面 0 处；拿空白名单做对照能同时报出题面与文件名）。出处保持<strong>折叠</strong>：展开就会把未批准的 gold_span 送进像素，而批准单位是字段。<strong>这一版是重拍的</strong>：上一张截图拍在"出处列表按列表位置重编号"的年代，那个缺陷已按 R2e 修掉（<code>docs/decisions</code> 结论 36 与 Q32），旧图两版全部标为「已废弃、未公开」，裁定记在 <code>pub/media_dispositions.json</code>。诚实说一句：<strong>这张新图本身看不出修复前后的差别</strong>——已批准的那几道题在 v8 里都只点了 <code>[1]</code>，名次与位置恰好相同；能看出差别的那一屏（<code>[4] [5] [2] [3]</code>）用的是未批准的题面，不能进产物。*</td></tr></tbody></table>
+<pre><code>core/      706 行，六个文件，四件事（0 个第三方解析库、0 处按扩展名分支）
+plugins/   parsers · chunkers · embedders · llms · stores · prompts · policies ＋ rerankers（空，接口位）
+           共 18 个插件实现文件，其中 2 个是"有意不实现"的占位（xlsx、扫描件 OCR）
+eval/      run.py（尺子）· adjudicate.py（人工仲裁）· index_guard.py（索引守卫）· duplicate_scan.py · privacy_scan.py
+app/       cli.py（F1 批量导入／命令行问答）· ui.py + server.py + privacy.py（界面壳）
+docs/      PRD · decisions（35 条取舍）· experiments（38 节跑分史）· model-selection · eval-baseline-d3
+data/      raw/ 真实语料（不入库）· manifests/ 台账 · vector_store/ chroma · quarantine/ 隔离区（含原因）</code></pre>
+<p>不想先读代码、想直接上手 → <strong>§10「5 分钟自己试用」</strong>，配一张 <code>docs/try-it-checklist.md</code> 打勾表。</p>
+<hr>
+<h2>2. 从零复现（每条命令都在本机真跑过）</h2>
+<pre><code># 0) 环境：Python 3.12.11（uv 管理，venv 里没有 pip）
+$env:PYTHONUTF8=1                      # 必带：Windows 默认 GBK，中文输出与 HTML 会乱码
+uv venv .venv --python 3.12.11
+uv pip install --python ./.venv/Scripts/python.exe -r requirements.txt   # 146 条钉死版本
+./.venv/Scripts/python.exe selfcheck.py                                  # 逐项探测环境（读配置，不硬编码型号）
+
+# 1) 装模型（**必须写全 tag**，理由见下面的前置条件）
+ollama pull qwen3-embedding:0.6b
+ollama pull qwen3.5:9b-q4_K_M
+
+# 2) 首次入库（F1）：扫 〔本机绝对路径，发布产物里不保留〕，注册表选解析器，按内容指纹幂等
+./.venv/Scripts/python.exe -m app.cli import --raw data/raw
+
+# 3) 记录索引指纹（基线）：跑分与界面入库出数前都要校验它
+./.venv/Scripts/python.exe -m eval.index_guard --write
+
+# 4) 跑分。retrieve 只量检索（约 18s，不叫模型）；full 走完整管线（约 116s，27 题）
+./.venv/Scripts/python.exe -m eval.run --stage retrieve
+./.venv/Scripts/python.exe -m eval.run --stage full
+
+# 5) 起界面
+./.venv/Scripts/python.exe -m app.server --port 8125      # http://127.0.0.1:8125
+
+# 6) 测试（全程离线：假插件 + 假嵌入，不叫模型、不联网）
+./.venv/Scripts/python.exe -m pytest -q                   # 条数随门禁增加而变，以实跑输出为准（不在这里钉数字）</code></pre>
+<h3>前置条件（这些不在 <code>requirements.txt</code> 覆盖范围内）</h3>
+<table><thead><tr><th>依赖</th><th>确切版本/位置（本机实测）</th><th>为什么必须写死</th></tr></thead><tbody><tr><td>Python</td><td>3.12.11（uv 管理的 venv，venv 内<strong>没有 pip</strong>）</td><td>安装命令一律 <code>uv pip install --python ./.venv/Scripts/python.exe ...</code></td></tr><tr><td>Ollama</td><td>0.40.13，模型目录 <code>data/models</code>（不占 C 盘）</td><td>嵌入与对话都靠它；<code>keep_alive=10m</code></td></tr><tr><td>嵌入模型</td><td><strong><code>qwen3-embedding:0.6b</code></strong>（639 MB，维度 1024）</td><td>⚠ <strong>坑（实测记在 <code>docs/model-selection.md</code>）：<code>ollama pull qwen3-embedding</code> 不写 tag 会静默装上 <code>latest</code>＝4.7GB 的 8b</strong>，比预期大 7 倍、慢得多，而 <code>dim=1024</code> 是配置与索引的契约——换 tag 等于换维度，索引必须重建</td></tr><tr><td>对话模型</td><td><strong><code>qwen3.5:9b-q4_K_M</code></strong>（6.10 GiB）</td><td>16G 显存实测能跑的档；<code>think=false</code> 是实测逼出来的（思考模式一句 30 字烧 8071 token）</td></tr><tr><td>LibreOffice</td><td>装在 <code>〔本机绝对路径，发布产物里不保留〕\LibreOffice</code>，<strong>不在 PATH</strong>（selfcheck 会 WARN）</td><td>docling 只认 PATH 或 <code>DOCLING_LIBREOFFICE_CMD</code>；没有它时 .docx 正文照抽，但会打印 <code>no DOCX to PDF converters</code> 并跳过 DrawingML/版式相关导出——<strong>这是一条静默降级，别当成"转换成功"</strong></td></tr><tr><td>GPU</td><td>RTX 4060 Ti 16GB（CPU 也能跑，只是慢）</td><td>型号写在配置里，换型号不动代码</td></tr></tbody></table>
+<p><strong>关于 <code>requirements.txt</code></strong>：它是 <code>uv pip freeze</code> 从当前环境原样导出的（146 条钉死版本，不手写）。 早期选型留下的三个"说不清为什么在里面"的包已经结清，判据是<strong>读已装发行版自己的 METADATA 看谁硬要它</strong>，不是凭印象：</p>
+<table><thead><tr><th>包</th><th>处置</th><th>实测依据</th></tr></thead><tbody><tr><td><code>fastapi</code></td><td><strong>已卸载</strong></td><td>本仓代码 0 处 import（界面用标准库 <code>http.server</code>）；提到它的只有 chromadb 的 <code>extra == 'dev'</code>、transformers/huggingface_hub 的 serving/testing extra——不装 extra 就永远不需要它</td></tr><tr><td><code>starlette</code></td><td><strong>已卸载</strong>（随 fastapi）</td><td>非 extra 的依赖方只有 <code>fastapi</code> 本身，fastapi 一走它就是孤儿</td></tr><tr><td><code>uvicorn</code></td><td><strong>保留，但不算我们的选型</strong></td><td><code>chromadb-1.5.9.dist-info/METADATA</code> 里 <code>Requires-Dist: uvicorn[standard]&gt;=0.18.3</code> <strong>没有 extra 标记＝硬传递依赖</strong>，删不掉：从清单里抹掉它，下次 <code>pip install chromadb</code> 仍会按 <code>&gt;=0.18.3</code> 解析出一个我们没钉过的版本；把它留在清单里钉死 0.54.0 才是可复现，把它写成"我们选了 uvicorn"就是不诚实</td></tr><tr><td><code>jieba</code></td><td>早已卸载（结论 24）</td><td>无代码引用的悬空依赖</td></tr></tbody></table>
+<p><code>selfcheck.py</code> 里这四个名字进同一张监视表（<code>DANGLING_PACKAGES</code>）：清单里再出现 <code>jieba</code>/<code>fastapi</code>/<code>starlette</code> 直接判 FAIL； <code>uvicorn</code> 已从 <code>REQUIRED_PACKAGES</code> 移出——传递依赖不该冒充成项目自己的必需包。 卸掉 fastapi+starlette 后重跑全量测试：<strong>290 passed, 1 skipped</strong>，与卸之前逐项相同。</p>
+<p><strong>这份清单是真空跑验证过的</strong>（S0 结掉残留后重验一遍，2026-11-03）：新建一个干净 venv → <code>uv pip install -r requirements.txt</code>（<strong>146 条</strong>）→ 用<strong>那个 venv 的 python</strong> 直接跑全量测试， 结果 <strong>290 passed, 1 skipped</strong>（那 1 条跳过是缺 <code>eval/queries.jsonl</code> 时的形状检查，题集不入库）。 干净环境里同样<strong>不存在</strong> <code>fastapi</code>/<code>starlette</code>/<code>jieba</code> 这三个名字，<code>uvicorn</code> 则由 chromadb 自动带入并钉在 0.54.0—— 所以没有"只有这台机器装了、别人装不出来"的隐性依赖。临时 venv 用完已删。 所以「一条命令装好依赖」这句话是可以照着做的，不是祝愿。 重跑这条验证：<code>uv venv tmp/verify_venv --python 3.12.11 &amp;&amp; uv pip install --python tmp/verify_venv/Scripts/python.exe -r requirements.txt &amp;&amp; PYTHONUTF8=1 tmp/verify_venv/Scripts/python.exe -m pytest -q</code>。</p>
+<p>冻结的 27 题题集在 <code>eval/queries.jsonl</code>（<strong>不入库</strong>，含语料原句）；它的 sha256 钉在 <code>eval/run.py</code>， 形状或内容漂移一律拒绝跑分。指标明细落 <code>eval/results/</code>（聚合数入库，含原话的明细在 <code>data/</code>，不入库）。</p>
+<hr>
+<h2>3. 架构：主程序只有四件事</h2>
+<p><code>core/</code> 六个文件里 <code>pipeline.py</code> 只负责：① 按注册表拿解析器→切片→嵌入→入库；② 用台账做幂等（同内容不重复消耗嵌入）； ③ 把"检索→组装上下文→作答"的顺序固定下来；④ <strong>出处只能来自检索命中，不认模型自述的编号</strong>。 它不知道文件格式、不知道模型型号、不知道向量库是谁。</p>
+<p><strong>七个契约</strong>（<code>core/contracts.py</code>，<code>@runtime_checkable Protocol</code>）：</p>
+<table><thead><tr><th>契约</th><th>实现插件</th><th>说明</th></tr></thead><tbody><tr><td><code>DocumentParser</code></td><td><code>md</code> <code>txt</code> <code>docx</code> <code>pdf</code> <code>xlsx</code>(占位) <code>ocr</code>(占位)</td><td>一个后缀集合 + 一个 <code>parse()</code></td></tr><tr><td><code>Chunker</code></td><td><code>fixed_size</code> <code>heading</code> <code>scaffold_strip</code></td><td><code>heading</code> 是出厂默认；标题并入那条没做（§7）</td></tr><tr><td><code>Embedder</code></td><td><code>ollama_local</code>（+云端预留）</td><td>维度与型号只从配置读</td></tr><tr><td><code>ChatModel</code></td><td><code>ollama_local</code> <code>ollama_cloud</code></td><td><code>think=false</code>＋固定采样是实测逼出来的（<code>docs/model-selection.md</code>）</td></tr><tr><td><code>VectorStore</code></td><td><code>chroma_local</code>（<code>pgvector_cloud</code> 预留）</td><td>文件型，零运维</td></tr><tr><td><code>PromptTemplate</code></td><td><code>legacy_v1</code> <code>corpus_framed</code> <code>refusal_prefixed(_v2)</code></td><td><strong>契约演进</strong>加的（PRD 禁令 3 的一次受控例外）</td></tr><tr><td><code>AnswerPolicy</code></td><td><code>legacy_v1</code> <code>cited_only</code></td><td>同上；出厂 <code>cited_only</code></td></tr></tbody></table>
+<p><strong>注册表三方向对照</strong>（<code>core/registry.py</code>）：</p>
+<table><thead><tr><th></th><th>怎么做</th><th>结论</th></tr></thead><tbody><tr><td>本项目</td><td>每个插件自带 <code>register(registry)</code>，<code>assembly.py</code> 扫 <code>plugins/*/*.py</code>，取用时按后缀<strong>查表</strong></td><td>加能力＝一个文件 + 一行配置</td></tr><tr><td>LlamaIndex <code>ID2FILE_DEFAULT_READERS</code></td><td>同样是"扩展名→Reader"注册表</td><td>直接参照物</td></tr><tr><td>Dify <code>extract_processor.py</code></td><td>按扩展名 <code>if/elif</code> 分派</td><td><strong>反面教材</strong>：加一种格式要改主流程</td></tr></tbody></table>
+<p><strong>"只加文件、<code>core/</code> 零改动"的真实提交</strong>（每条都用 <code>git show --name-only &lt;c&gt; -- core/</code> 验证为空）： <code>71b2f7a</code> md/txt 解析器 · <code>3eeb338</code> docx/pdf + xlsx/ocr 占位 · <code>a3072d8</code> 标题结构切片策略 · <code>cd92b24</code> 脚手架句剔除 chunker · <code>27a0b7c</code>/<code>fcf8e9c</code> 提示词插件 · <code>025af4d</code> 索引守卫（新增文件，主程序 0 改动）。</p>
+<p><strong>架构禁令同时钉在被保护物上</strong>（不是只钉嫌疑人）：<code>eval/index_guard.py</code> 记录基线索引指纹 （集合名＋条数＋<code>rel_path/seq/locator</code> 校验和，<strong>不含正文</strong>），跑分与界面入库两个入口在动手前校验， 不符就打印期望值与实际值并硬失败。它存在的理由是一次真实事故：界面上传覆写了 216 条片段的 <code>rel_path</code>——指标一列都没变，但那正是并列确定性的排序键（<code>docs/experiments.md</code> 第 37 节）。</p>
+<hr>
+<h2>4. 检索质量：v2 → v8 全表（失败行照登）</h2>
+<p>27 题＝22 正样本 + 5 负样本，一次跑完；同一份语料快照、同一个索引。尺子换过五次（<code>R2b</code>／<code>R2b2</code>／<code>R2c2</code>／<code>R2d</code>／<code>R2e</code>），跨口径不许直接算差值。<strong>每张表里的百分比都不是"准确率"</strong>， 它们是下面这些有分母的东西：</p>
+<table><thead><tr><th>行</th><th>唯一变量</th><th>Recall@5</th><th>放行含gold率</th><th>实质作答率</th><th>过度拒答率</th><th>负样本正确拒答率</th><th>口径</th></tr></thead><tbody><tr><td><code>baseline-current-v2</code></td><td>立尺子（20→22 正、正负合批、指标补全）</td><td>0.500（11/22）</td><td>0.636（14/22）</td><td>0.500（11/22）</td><td>0.364（4/11）</td><td>1.000（5/5）</td><td>旧（无契约前缀要求）</td></tr><tr><td><code>baseline-current-v3</code></td><td>只固定采样 <code>temp=0</code>＋<code>seed</code></td><td>0.500</td><td>0.636</td><td>0.455（10/22）</td><td>0.364（4/11）</td><td>1.000（5/5）</td><td>旧</td></tr><tr><td><code>P-run-1</code> / <code>P-run-2</code></td><td><code>corpus_framed</code>+<code>cited_only</code> 两处分量不动，<strong>判失败</strong></td><td>0.500</td><td>0.636</td><td>0.636（14/22）/ 0.545（12/22）</td><td>0.091（1/11）/ 0.182（2/11）</td><td>0.800（4/5）/ 1.000（5/5）</td><td>旧；<code>temp=0.2</code> 噪声 ±1~2 题</td></tr><tr><td><code>P1-cited-only</code></td><td>只动呈现层出处筛选</td><td>0.500</td><td>0.591（13/22）</td><td>0.455（10/22）</td><td>0.364（4/11）</td><td>1.000（5/5）</td><td>旧</td></tr><tr><td><code>baseline-current-v4</code></td><td>A0：<code>cited_only</code> 转正式默认</td><td>0.500</td><td>0.636</td><td>0.455</td><td>0.364</td><td>1.000（5/5）</td><td>旧</td></tr><tr><td><strong>行 A（scaffold_strip）</strong></td><td>删跨文件逐字重复句＋重建索引</td><td><strong>0.545（12/22）</strong></td><td>0.591（13/22）</td><td>0.545（12/22）</td><td>0.364（4/11）</td><td>1.000（5/5）</td><td>旧；<strong>净收益只有 1 题，不转正</strong></td></tr><tr><td><code>baseline-current-v5</code></td><td>尺子 R2b：合格拒答＝查固定前缀</td><td>0.500</td><td>0.636</td><td>0.455</td><td>0.364</td><td><strong>0.000（0/5）</strong></td><td>R2b（口径第一次）</td></tr><tr><td><code>baseline-current-v6</code></td><td>尺子 R2b2：拆类 A／类 B，离线重算</td><td>0.500</td><td>0.636</td><td>0.455</td><td>0.364</td><td>0.400（2/5）｜前缀合规率 0/3</td><td>R2b2（第二次）</td></tr><tr><td><code>baseline-current-v7</code></td><td>尺子 R2c2：分母固定＋新增误用率列</td><td>0.500</td><td>0.636</td><td>0.455</td><td>0.364｜误用率 0/22</td><td>0.400（2/5）｜前缀合规率 0/3</td><td>R2c2（第三次）</td></tr><tr><td><strong>行 Pref</strong></td><td>提示词加"必须打前缀"</td><td>0.500 未动</td><td>0.636 未动</td><td><strong>0.000（0/22）</strong></td><td><strong>1.000（11/11）</strong></td><td>0.600（3/5）｜前缀合规率 1/1＝<strong>分母塌缩，不是成绩</strong></td><td><strong>判失败</strong></td></tr><tr><td><strong>行 Pref2</strong></td><td>顺序反转＋可自判触发条件</td><td>0.500 未动</td><td>0.636 未动</td><td>0.182（4/22）</td><td>0.636（7/11）｜误用率 0.773（17/22）</td><td>0.600（3/5）｜前缀合规率 0.333（1/3）</td><td><strong>判失败</strong>（误用率没压住）</td></tr><tr><td><strong>行 P2</strong></td><td>出厂提示词换 <code>corpus_framed</code></td><td>0.500 未动</td><td>0.636 未动</td><td><strong>0.591（13/22）</strong></td><td><strong>0.091（1/11）</strong></td><td>自动初判 answered=1 → 人工终判 <strong>0</strong>｜前缀合规率 0/3</td><td><strong>判失败→经 R2d 重算通过</strong>（修订动机与前科见结论 32/33）</td></tr><tr><td><strong><code>baseline-current-v8</code>（当前左列）</strong></td><td>A0′：<code>corpus_framed</code> 转正＋重跑基线</td><td>0.500（11/22）</td><td>0.636（14/22）</td><td>0.591（13/22）</td><td>0.091（1/11）｜误用率 0/22</td><td><strong>2/5 初判／3/5 人工终判</strong>｜前缀合规率 0/3</td><td>R2d（第四次判定口径）＋R2e（第五次：只加 <code>引用可对应率</code> 一列，v8 该行 <strong>0.563</strong>，界面按名次标注后重算为 1.000，见第 39 节）</td></tr></tbody></table>
+<p><strong>分母约定</strong>：这张表里凡只写小数、没跟着分母的格，按本列第一行的分母读—— <code>Recall@5</code>／<code>放行含gold率</code>／<code>实质作答率</code> 分母 <strong>22</strong>（正样本数），<code>过度拒答率</code> 分母 <strong>11</strong>（gold 已被放行的正样本数，定义在 PRD §3）， 负样本列分母 <strong>5</strong>。跨口径的两行之间不许直接相减，看下面这条时间线。</p>
+<p><strong>口径时间线</strong>（同一根尺子被换过五次，跨口径不许直接算差值）： <code>R2b</code>（v5 起：认固定前缀）→ <code>R2b2</code>（v6 起：拆类 A／类 B，<code>前缀合规率</code> 分母只数类 B）→ <code>R2c2</code>（v7 起：分母固定为类 B 题数 ＋ 新增 <code>契约句误用率</code>）→ <code>R2d</code>（v8 起：负样本门禁读<strong>人工终判</strong>，报表并列 自动初判／人工终判／不一致数）→ <code>R2e</code>（2026-11-04 起：新增 <code>引用可对应率</code>，量的是"正文点的名次"与"屏幕标签那一行"是否同一条片段—— <strong>只加列、不改任何既有判定，也没有重跑</strong>，全部读数由 <code>tools/citation_alignment.py</code> 从存量明细离线重算，逐行值见第 39 节）。 完整逐行记录与每一次修订的证据在 <a href="experiments.html"><code>docs/experiments.md</code></a>。</p>
+<p><strong>随机基线对照</strong>：索引 216 个片段、每题取 top5，闭眼瞎猜命中 gold 的概率是 <strong>5/216 ≈ 0.023</strong>； <code>baseline-current-v8</code> 的 <code>Recall@5</code> 0.500（11/22）是它的约 <strong>21.7 倍</strong>（0.500 ÷ 0.023，同一套 27 题、v8 口径）—— 但 22 道正样本里仍有 11 道题的前 5 名没有 gold，"可用"谈不上，这一点也不藏。</p>
+<hr>
+<h2>5. 四层失效模型（这一节是事故报告，不是功能清单）</h2>
+<p>同一份跑分上，"答得不好"其实有四个独立的原因层，每层由<strong>一个不同的指标列</strong>暴露，修错层等于白干：</p>
+<table><thead><tr><th>层</th><th>症状</th><th>是哪一列暴露它</th><th>代码在哪</th></tr></thead><tbody><tr><td><strong>① 排名层</strong></td><td>gold 被别家文档的同构模板片段压在下面（10/22 题跌出前 10）</td><td><code>Recall@5</code>、<code>gold_rank</code> 直方图</td><td>切片与嵌入输入：<code>plugins/chunkers/</code>（<code>heading</code> 是出厂）；<code>scaffold_strip</code> 实测只值 1 题，不转正</td></tr><tr><td><strong>② 判据层</strong></td><td>绝对阈值两头错：0.407 的真答案被拒、0.506 的无关内容放行</td><td><code>管线层假阴性</code>、<code>检索层假阳性</code></td><td><code>core/pipeline.py._retrieve</code> 的 <code>min_score</code>（<strong>已证伪单条绝对线</strong>，改双条件判据排在行 E）</td></tr><tr><td><strong>③ 可答性层</strong></td><td>gold 已进上下文，模型仍答"资料中没有"（第四层失效，检索指标完全看不见）</td><td><code>过度拒答率</code>、<code>实质作答率</code></td><td><code>plugins/prompts/</code>（出厂 <code>corpus_framed</code>：告诉模型语料长什么样＋哪段管这件事，4/11 → <strong>1/11</strong>）</td></tr><tr><td><strong>④ 呈现层</strong></td><td>答案拒对了，出处列表却列着一堆无关文件</td><td><code>模型真引用gold率</code>、<code>污染率·展示口径</code></td><td><code>plugins/policies/cited_only.py</code>（只保留被实际引用的编号）；新缺陷登记在 §7（Q29）</td></tr></tbody></table>
+<p>三条从事故里长出来的纪律，都写进了 PRD 第 3 节并有测试守着：</p>
+<ul><li><strong>指标按层归属，一列只属于一层</strong>：换呈现插件时检索列必须一动不动（起因：<code>放行含gold率</code> 一度算在展示列表上，跟着呈现层抖，是<strong>假归因</strong>）。</li><li><strong>指标 0 抖动 ≠ 同分并列次序 0 抖动</strong>：逐字相同的两个片段跨进程换序（<code>rel_path</code> 相同文本、向量逐位相同），</li></ul>
+<p>  修法是向 chroma 多要候选再按内容排序（<code>plugins/stores/chroma_local.py</code>），并配"把排序打透传就必须红"的对照。</p>
+<ul><li><strong>评测集只能被跑，不能被调</strong>：单行只跑一次；反复调措辞只能用集外靶测。用 gold_span 反推触发条件＝把尺子折进被测物。</li></ul>
+<p>还有一条是<strong>给指标本身</strong>的：<code>前缀合规率</code> 曾经把破防题排除在分母外，于是"模型越硬答分越高" （行 Pref 实测 1/1＝100%）。判别法写进 PRD §4.5：<strong>把被测行为改坏，这个数会不会变差？不会变差就是无效检查。</strong></p>
+<hr>
+<h2>6. 被证据否决的选项（不写代码就省下的岔路）</h2>
+<table><thead><tr><th>被否决的选项</th><th>否决它的那个数字</th></tr></thead><tbody><tr><td><strong>绝对相似度阈值</strong>当放行判据</td><td>gold 0.407 被拒、无关 0.506 放行——分数区间重叠，一条线必然两头错</td></tr><tr><td><strong>混合召回</strong>（BM25＋向量＋RRF）</td><td>离线预演：11 道未命中题里字面路只够得着 1 道，默认参数下 <code>Recall@5</code> 11/22 → <strong>10/22</strong>，是回归。根因：出题纪律让口语提问与模板语料几乎不共享词面</td></tr><tr><td><strong>契约内模板降权</strong>（重排）</td><td>λ＝0.10／0.15／0.20／0.30 四档：<code>Recall@5</code> 11/22→10/22→9/22→8/22，救回恒为 <strong>0/22</strong>。<strong>重排只能"少排错"，不能"多找回"</strong></td></tr><tr><td><strong>侧信道</strong>（嵌入插件把查询文本按向量作键递给 store）</td><td>为 1 题天花板引入插件间隐藏耦合，破坏"插件只通过契约相见"</td></tr><tr><td><strong>跨文档模板剔除</strong>当检索优化手段（行 A）</td><td>净收益 ＋1 题（<code>Recall@5</code> 11/22→12/22），但 <code>放行含gold率</code> 14/22→13/22、<code>管线层假阴性</code> 1/22→2/22，且被删句里 3 条是真内容 → 重新定位为内容卫生手段，不转正</td></tr><tr><td><strong>自动补前缀</strong>（系统在输出外面拼那句契约话）</td><td>会让 <code>前缀合规率</code> 变成构造性恒 100%——与恒 0 的"无有效引用率"同族假绿。要修就修行为，且分两列报（自发率／规范化后合规率）</td></tr><tr><td><strong>反向激励指标</strong>（分母随被测行为伸缩）</td><td>行 Pref 实测：破防题退出分母 → 同一批输出从 0/3 报成 <strong>1/1＝100%</strong>。R2c2 修成固定分母</td></tr></tbody></table>
+<hr>
+<h2>7. 没做什么，以及为什么（都是明确排后的取舍，不是失败）</h2>
+<table><thead><tr><th>没做</th><th>原因</th></tr></thead><tbody><tr><td><strong>xlsx 解析</strong>、<strong>扫描件 OCR</strong></td><td>有意只留接口位：<code>plugins/parsers/xlsx_parser.py</code>、<code>ocr_parser.py</code> 正常登记后缀、<code>parse()</code> 抛 <code>CapabilityNotImplemented</code>，界面显示"第一版有意不实现，原因见 PRD 1.2"。多 sheet/合并单元格转文本后检索质量差；OCR 会把噪声直接灌进检索输入</td></tr><tr><td><strong>F9 整篇原文预览</strong></td><td>界面只做到<strong>片段级</strong>（点出处展开被引用的那段原文）。整篇预览需要第二条取数通路，而"界面只许走管线"是本项目的硬约束（有 spy 测试钉住）</td></tr><tr><td><strong>行 M（换嵌入模型）、行 E（放行判据双条件）</strong></td><td>时间裁定（PRD §9 第 7 天）：实验线收口在 R2d ＋ B 的离线位移预演。M 会作废现行阈值、E 要重新标定，两者都不是半天能收口的活</td></tr><tr><td><strong><code>无有效引用率</code> 2/21</strong>（题 14 给了长答案却零有效编号、题 5 输出畸形编号「[无]」）</td><td>呈现层新缺陷，登记在 <code>docs/decisions</code> Q29 排给 <code>policies</code> 线。本轮不动它，也<strong>不记进行 P2 的成绩</strong></td></tr><tr><td><strong>AnythingLLM 同题对照表</strong></td><td>只装了它当"活教材"照抄目录组织方式（结论 13），同题集对比没跑。要跑需先解决它的切片策略与本语料的对应关系</td></tr><tr><td><strong>并发、缓存、连接池</strong></td><td>单用户本地工具，加这些只会让"哪些改动值得"失去可测的对照组。真正需要的是<strong>幂等</strong>（台账 <code>core/manifest.py</code>：同内容不重复消耗嵌入）</td></tr><tr><td><strong>云端形态与口令</strong></td><td><strong>核实之后的主动不做，不是没来得及。</strong> 官方文档写明：默认域名会展示"访问提示中间页"，访客必须点击「确定访问」才能进入业务页；而移除它的<strong>唯一合规途径</strong>是绑定已完成 ICP 备案的自定义域名（原句与 URL 见 <a href="findings.html"><code>docs/cloud-deployment-findings.md</code></a> F1／F2）。对一个真实读者只有 5 分钟的作品集，把第一屏让给一道要人确认的风险提示不划算，而备案是周级外部流程、不在一周预算内。已具备的是<strong>契约位</strong>（<code>core/contracts.py</code> 的 <code>ChatModel</code> 与 <code>VectorStore</code>）与那份文档里三条挂着原句的可行路径（含"函数内置 0.88 MB 索引现算余弦"）；同一份文档也列了 6 项<strong>未核实</strong>，包括免费环境的超时档位与内置嵌入模型有无。口令设计上走环境变量、不入库</td></tr><tr><td><strong>泛问题与切片粒度错配</strong>（"省市小作文怎么写"召不到具体篇目）</td><td>记为已知限制不修：这是提问意图与内容粒度不匹配，要修得改语料组织方式，代价与收益不成比例</td></tr><tr><td><strong>角色泄漏：答案以资料里规定的角色自称，而不是陈述资料</strong>（Q31，界面实测原话 <code>你好！我是你的文案创作助手。……</code>）</td><td><strong>v8 转正 <code>corpus_framed</code> 的副作用</strong>：system 要求"按该段资料规定的步骤与要求回答"，而语料本身就是一份份规定身份的指令模板——越听话越像角色扮演。两条修法都不能要：改提示词＝重跑基线、v8 的左列身份作废；在呈现层把答案改写成陈述式＝<strong>伪造用户看到的东西</strong>。<code>实质作答率</code> 看不见它（有内容就算分）、<code>前缀合规率</code> 与 R2d 人工终判也不管"说话的是谁"，所以它拿的是好消息的分数。登记不修，理由与处置写在 <code>docs/decisions</code> Q31</td></tr><tr><td><strong>正文编号与出处列表编号是两套</strong>（Q32；用户第一手看到正文出现 <code>[6]</code> 而 <code>top_k=5</code>、列表只有 1–4）</td><td><strong>界面侧那半本轮已修</strong>：<code>app/ui.py</code> 不再按列表位置重编号，标签就是检索名次，允许不连续——重跑那一屏得到 <code>[4] [5] [2] [3]</code>，与正文一致（测试先行四条在 <code>tests/test_ui_shell.py</code>，截图也按 R2e 重拍）。<strong>仍未修的是越界编号</strong>：模型自己点 <code>[9]</code>、<code>[10]</code> 而命中只有 5 条时，标签改法救不了它（属 Q29 家族）。为了让这类错误以后能被量到，本轮新增观察列 <code>引用可对应率</code>（尺子第五次变更 R2e，<code>tools/citation_alignment.py</code> 离线重算，v8 那行从 <strong>0.563</strong> 到 1.000，逐行值见第 39 节）</td></tr><tr><td><strong>"有命中却答没有"时，界面不说"检索到 N 条但都不相关"</strong>（Q33，界面实测：答案区 <code>资料中没有 [3]</code>、状态行 <code>检索 5 条</code>）</td><td>那句"管线判为无可用资料"只在检索归零时挂上，于是用户看到一句带编号的"没有"，看不到 N 条命中其实不覆盖问题。写"都不相关"是相似度分数撑不起的断言（结论 29/31 已经两次证明这类万能话会变质），诚实版要说"检索到 N 条、判为不足以回答"，那就得给 <code>Answer</code> 契约加状态字段＝动主程序契约面，按 PRD 第 4 节得先预注册。本轮预算不在契约演进（<code>docs/decisions</code> Q33）</td></tr><tr><td><strong>登录/账号体系</strong></td><td>本地形态不设登录（结论 10）；公网访问才加一个最简口令</td></tr></tbody></table>
+<hr>
+<h2>8. 隐私与可复现声明</h2>
+<ul><li><strong>语料与含原句的评测明细一律不入库</strong>：<code>data/</code> 整体 gitignore，<code>eval/queries*.jsonl</code> 不入库（README 只放聚合数字）。</li><li><strong>敏感文件不入库、不进列表、不进出处</strong>：<code>eval/privacy_scan.py</code> 按形态检测（产品密钥、网盘提取码、口令、私钥块、身份证号），</li></ul>
+<p>  命中禁止级的文件留在 <code>〔本机绝对路径，发布产物里不保留〕</code>（里面附一份逐条原因说明；那个文件名不抄在这里——产物侧门禁 G16 只放行获准的名字与工程自己的文件名）。界面复用同一套规则（一份不复制），   错误信息与访问日志就地打码；白名单来自扫描结果，代码里没有文件名清单。</p>
+<ul><li><strong>上面那张截图是按字段批准后才发布的</strong>：画面里的文本用几何式审计取一遍（只收当前视口内真正可见的元素，</li></ul>
+<p>  折叠的原文块不算、输入框里的题面要算），实测视野内 721 字、未批准字面 0 处；   拿空白名单做同一套比对时能同时报出题面与文件名，所以这个审计器双向都可信。   出处行保持折叠——展开就会把未批准的 <code>gold_span</code> 送进像素，而批准单位是字段不是题目（冲突记录在 <code>pub/approvals.json</code>）。   录屏画面另有更严的一套：四类检查 0 命中、阳性对照 6/6，记在 <code>docs/demo-checklist.md</code>；   隔离区那批文件的名字从头到尾不进任何对外文档，连数量都只写实测的 6 份。</p>
+<ul><li><strong>站点与仓库是两份发布物，检查也是两套</strong>：<code>python -m pub.build</code> 管 <code>dist/</code> 干不干净，</li></ul>
+<p>  <code>python -m pub.publish_check</code> 管"把这批提交整个推上公网会不会漏东西"（G10 被跟踪文件、G11 媒体版本收口）。   构建那边覆盖哪几号门禁，由 <code>pub/gates.py</code> 里 <code>run_all</code> 的接线决定，<strong>README 不重述号段</strong>——   以前抄过一次就直接腐烂了（加到 G16 时没人回来改这行），现在由 <code>pub.final_checklist</code> 从接线推出来印在清单第一节。   dist 全绿不等于仓库可以公开。<strong>具体差多少处一律不写在这里</strong>——写死一个数就会过期，   本轮已经为此错过三次；当前阻塞集由 <code>python -m pub.final_checklist</code> 生成到   <code>docs/publication-final-checklist.md</code>，历史命中与处置方案在 <code>docs/publication-history-audit.md</code>   （那份报告只写路径／类型／字段名＋字面哈希，写原文会让构建失败，这条是 G12）。</p>
+<ul><li><strong>指标可复现</strong>：对话模型固定 <code>temperature=0.0</code> ＋ <code>seed=20261102</code>（Ollama 0.40.13 实测认 seed，</li></ul>
+<p>  同 seed 在 <code>temp=1.2</code> 下都能产出逐字节相同的输出）；跑分产物记录采样指纹；   索引指纹由 <code>eval/index_guard.py</code> 记录并在出数前校验，不符直接拒绝。</p>
+<ul><li>唯一"不可复现"的部分我不遮着：v2/P-run 两代跑分是在 <code>temperature=0.2</code> 下单次抽样得到的，</li></ul>
+<p>  表里逐行标注了"旧口径"，跨口径不算差值。</p>
+<hr>
+<h2>9. 简历话术三条 ＋ 最可能的追问</h2>
+<ol><li><strong>一周独立完成本地优先的模块化 RAG</strong>：706 行主程序 ＋ 7 个可替换契约（5 个第一版就有，2 个是证据逼出来的演进），加一种文件格式只需新增一个插件文件</li></ol>
+<p>   ＋ 一行配置（<code>71b2f7a</code>／<code>3eeb338</code> 等 6 条"主程序零改动"提交为证）。</p>
+<ol><li><strong>自己建了评测尺子并用它定位出四层独立失效</strong>（排名／判据／可答性／呈现），每层绑定可检验指标；</li></ol>
+<p>   27 题集 sha256 冻结、采样固定可复现，把"过度拒答率"从 <strong>4/11 降到 1/11</strong>（v7→v8；这一列分母与定义都没动，    R2d 改的是负样本那三列）。</p>
+<ol><li><strong>用数据否决了自己的初始设计</strong>：绝对相似度阈值、混合召回、契约内重排、自动补前缀四个方案被实测数据判死，</li></ol>
+<p>   结论登记在 <code>docs/PRD</code> §4.5；三次修复"合格拒答"判据后，最终把语义判断交回人工仲裁并留下不一致数列。</p>
+<p>追问准备（完整 8 问与答在 <code>docs/interview-notes.md</code>，这里只留最可能被当场问到的四条）：</p>
+<ul><li>*"为什么不做并发和缓存？"* → 单用户本地工具，加它们不会多回答一个问题，却会让"哪些改动值得"失去可测对照；</li></ul>
+<p>  我真正需要的是幂等，所以做了内容指纹台账。</p>
+<ul><li>*"为什么不顺手把 xlsx 也做了？"* → 多 sheet/合并单元格转文本会直接污染检索输入，代价是<strong>降低</strong>别人以为会提高的东西；</li></ul>
+<p>  我把它做成占位插件，接口在、能力诚实缺席。</p>
+<ul><li>*"你的 Recall 0.5 是不是太低？"* → 是，且这就是留着失败行的原因：随机基线是 5/216 ≈ 0.023，我拿到约 21.7 倍但没到可用；</li></ul>
+<p>  而"没被向量召回的片段降权再狠也进不了候选集"这条已经用数据证明，剩下的路是重做嵌入输入或换嵌入（M），那需要整段预算。</p>
+<ul><li>*"改判据会不会是把分数改好看？"* → 判据修订与实验行永远分开提交，历史旧读数不覆盖、新读数另起一行，</li></ul>
+<p>  每条判据都配"能让它失败的阳性对照"；我还记了一次真实事故：界面把基线索引元数据写坏了，   指标一列都没变，但那正是并列确定性的排序键（<code>docs/experiments.md</code> 第 37 节），修完之后把守卫钉在了被保护物上。</p>
+<hr>
+<h2>10. 5 分钟自己试用（照这张表走就行）</h2>
+<pre><code>$env:PYTHONUTF8=1
+./.venv/Scripts/python.exe -m app.server --port 8125      # http://127.0.0.1:8125</code></pre>
+<p>打开页面后照着 <code>docs/try-it-checklist.md</code> 一行行走，<strong>每一栏都留了「我的第一反应」等你当场写</strong>（下表每一行都是我本机实测过的）：</p>
+<table><thead><tr><th>做什麼</th><th>你会看到（这些是我本机实测的屏幕原话）</th></tr></thead><tbody><tr><td>点「预热模型」</td><td>状态行 <code>预热完成，357 ms</code></td></tr><tr><td>问 5 个你自己的问题</td><td>状态行 <code>检索 N 条｜耗时 X ms</code>，答案区下面每条出处都可展开原文片段</td></tr><tr><td>问一个库里肯定没有的问题</td><td>答案区 <strong><code>资料中没有相关内容，无法回答。</code></strong>，状态行 <code>检索 0 条｜耗时 316 ms｜管线判为无可用资料</code>，出处区 <code>本答案没有出处列表</code></td></tr><tr><td>问一个"检索命中了、但资料其实不管这件事"的问题</td><td>状态行 <code>检索 1 条｜耗时 852 ms</code>（没有那句「管线判为无可用资料」），答案区是 <code>资料中没有 [1]</code>——<strong>这句话是模型自己写的，出处区还列着一条资料</strong>；§4 的<code>前缀合规率</code>与 §5 的<code>无有效引用率</code>量的就是这一格</td></tr><tr><td>上传一份自己的新文档</td><td>状态流转 <code>解析中</code> → <code>已入库 &lt;那份文件&gt; 片段 1 个｜0.33s</code>（刷新后它才进底部「已入库文件」清单）</td></tr><tr><td>问一个只有新文档能答的问题</td><td>答案带引用编号，出处写 <code>[1] &lt;那份文件&gt; · &lt;文档里的小节名&gt;</code>，展开就是刚传上去的那段</td></tr><tr><td>传一份内容里带一行密钥赋值的文件（键名形如 <code>api_key</code>，值随便编造）</td><td><code>失败 &lt;那份文件&gt; —— 内容含密钥／口令／提取码一类凭据，界面已拦下，未入库（PRD 第 6 节隐私红线）</code></td></tr></tbody></table>
+<blockquote>文件名一律写成 <code>&lt;那份文件&gt;</code>：上传进沙箱的文件名会进台账、台账名单受门禁 G14 管， 抄进这份会被公开出去的文档就得先逐条批准。我实测用的那三份样例（一份 4 行的小 <code>.md</code>、一份带密钥赋值的 <code>.txt</code>、 以及我问的那两句问题）都只留描述，原文留在本机的 <code>data/</code> 里。</blockquote>
+<p>三条要说在前面的边界：</p>
+<ul><li><strong>拒答那句是判据插件给的原文</strong>（<code>plugins/policies/_refusal.py</code> 里的 <code>F5_ANSWER</code>），界面没再加工；</li></ul>
+<p>  出厂装配是提示词 <code>corpus_framed</code> ＋ 判据 <code>cited_only</code>——页面底部那张只读的装配指纹表就是证据。   两个判失败的前缀方案（行 Pref／行 Pref2，结论 29 与 31）都没上线，所以这里不会出现"先道歉再硬答"那类措辞（§4 表）。</p>
+<ul><li><strong>你传的东西动不到跑分</strong>。界面写的是沙箱集合 <code>xuanling_ui</code>，§4 那些数字量在基线集合上</li></ul>
+<p>  （基线集合的名字钉在 <code>.env</code> 里，这里不抄）；   这条分界不是口头保证，<code>docs/experiments.md</code> 第 37 节记着它曾经被 <code>setdefault</code> 打穿过一次，   现在由 <code>app/server.py</code> 硬覆盖 ＋ <code>tests/test_ui_shell.py::test_界面永远不许写进基线集合</code> 守着。</p>
+<ul><li><strong>界面里能问出好结果，不代表指标好看</strong>。§4 左列 v8 的 Recall@5 是 <strong>0.500（11/22）</strong>：22 个正样本里正好一半的</li></ul>
+<p>  gold 片段压根进不了前 5，而"没被向量召回的片段降权再狠也进不了候选集"这条已经用数据证明（结论 18 的四层失效）。   试用时请把它当"能跑、能拒、能追出处"的样机，别当已完成的检索产品。</p>
+<hr>
+<p>*文档地图：PRD（约束与否决） · 决策记录（35 条编号结论＋1 条 31b 补记） · <a href="experiments.html">实验记录（38 节跑分史）</a> · 模型选型实测 · 基线与语料体检 · 3 分钟录屏分镜 · 录屏粘贴清单（逐拍实测值） · 录屏画面核查 · 面试问答准备（8 问） · 5 分钟自己试用（打勾表） · <a href="findings.html">云端部署核实记录（5 条原句＋6 项未核实）</a> · 公开前历史审计 · 公开前终审清单*</p></main>
+<footer>静态站点：无后端、无 API Key、不外呼模型。数据来自本机跑分明细的 L1 分层导出，构建时已过发布门禁。
+<br>录屏视频发布位：<span class="refused">〔尚未录制；未批准的媒体文件由门禁 G7 拦在产物之外〕</span></footer>
+</body></html>
